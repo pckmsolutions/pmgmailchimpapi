@@ -72,6 +72,11 @@ class MailchimpApi(ApiBase):
             return await self.post(f'templates',
                     json={'name': name, 'html':f.read()})
 
+    async def update_template(self, *, id, name, html_file):
+        with open(html_file, 'r') as f:
+            return await self.patch(f'templates/{id}',
+                    json={'name': name, 'html':f.read()})
+
     async def get_list_interests(self, int_cat_id):
         return await self._get_list(f'interest-categories/{int_cat_id}/interests')
 
@@ -97,13 +102,15 @@ class MailchimpApi(ApiBase):
             async for member in _members_itr:
                 if not member.interests:
                     continue
-
-                members.append({'email_address': member.email_address,
+                mem = {'email_address': member.email_address,
                         'merge_fields': {'FNAME': member.first_name,
                             'LNAME': member.last_name},
                         'status':'subscribed',
-                        'interests': {int_id: True for int_id in member.interests}
-                        })
+                        } 
+                if member.interests is not None:
+                    mem['interests'] = {int_id: True for int_id in member.interests}
+
+                members.append(mem)
                 count += 1
                 if count >= BATCH_LIMIT:
                     break
