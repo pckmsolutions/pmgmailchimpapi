@@ -1,4 +1,5 @@
 from aiohttp import BasicAuth
+from aiohttp.client_exceptions import ClientResponseError
 from itertools import islice
 from pmgaiorest import ApiBase
 from logging import getLogger
@@ -83,8 +84,21 @@ class MailchimpApi(ApiBase):
     async def get_list_interest_categories(self):
         return await self._get_list('interest-categories')
 
-    async def get_list_members(self, *, list_id):
-        return await self._list_op(self.get, 'members', list_id=list_id)
+    async def get_list_members(self, *, list_id, count=100, offset=0):
+        return await self._list_op(self.get, 'members', list_id=list_id,
+                params={'count': count, 'offset': offset})
+
+    async def itr_list_members(self, *, list_id):
+        offset = 0
+        count = 50
+        while True:
+            page = await self._list_op(self.get, 'members', list_id=list_id,
+                    params={'count': count, 'offset': offset})
+            for mem in page['members']:
+                yield mem
+            offset += count
+            if offset > page['total_items']:
+                break
 
     async def batch_subscribe(self, members_itr, *, list_id=None):
         if not hasattr(members_itr, '__anext__'):
@@ -125,6 +139,14 @@ class MailchimpApi(ApiBase):
     async def get_segments(self, *, list_id, params=None):
         return await self._list_op(self.get, 'segments',
                 params=params or {}, list_id=list_id)
+
+    async def archive_member(self, *, list_id, member_id):
+        try:
+            await self._list_op(self.delete, '/'.join(['members', member_id]), list_id=list_id)
+            return True
+        except ClientResponseError as e:
+            logger.error('Could not archive member %s', member_id)
+            return False
 
     async def _list_op(self, op, path=None, *, list_id, **kwargs):
         list_path = '/'.join(('lists', list_id),)
