@@ -5,6 +5,7 @@ from pmgaiorest import ApiBase
 from logging import getLogger
 from collections import namedtuple
 from typing import Dict
+import hashlib
 
 logger = getLogger(__name__)
 
@@ -78,11 +79,31 @@ class MailchimpApi(ApiBase):
             return await self.patch(f'templates/{id}',
                     json={'name': name, 'html':f.read()})
 
-    async def get_list_interests(self, int_cat_id):
-        return await self._get_list(f'interest-categories/{int_cat_id}/interests')
+    async def get_list_interest_categories(self, list_id):
+        return await self._list_op(self.get, 'interest-categories', list_id=list_id)
 
-    async def get_list_interest_categories(self):
-        return await self._get_list('interest-categories')
+    async def get_list_interests(self, *, int_cat_id, list_id):
+        return await self._list_op(self.get, f'interest-categories/{int_cat_id}/interests', list_id=list_id)
+
+    async def get_list_member(self, *, list_id, member_email):
+        email_hash = _email_to_hash(member_email)
+        try:
+            return await self._list_op(self.get, f'members/{email_hash}', list_id=list_id)
+        except ClientResponseError as e:
+            logger.error('Could not find member %s', member_email)
+            return None
+
+    async def update_interest_subscriptions(self, *, list_id, member_email, interests):
+        email_hash = _email_to_hash(member_email)
+        try:
+            return await self._list_op(self.patch,
+                    f'members/{email_hash}',
+                    list_id=list_id,
+                    json={'interests': interests}
+                    )
+        except ClientResponseError as e:
+            logger.error('Could not find member %s', member_email)
+            return None
 
     async def get_list_members(self, *, list_id, count=100, offset=0):
         return await self._list_op(self.get, 'members', list_id=list_id,
@@ -153,4 +174,7 @@ class MailchimpApi(ApiBase):
         if path:
             list_path = '/'.join((list_path, path),)
         return await op(list_path, **kwargs)
+
+def _email_to_hash(email):
+    return hashlib.md5(email.encode()).hexdigest()
 
