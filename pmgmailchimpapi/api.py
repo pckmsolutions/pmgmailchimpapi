@@ -151,11 +151,12 @@ class MailchimpApi(ApiBase):
                     break
 
             if not len(members):
-                return
+                return 0
 
             await self._list_op(self.post, 
                     json = {'members': members, 'update_existing': True},
                     list_id=list_id)
+            return count
 
     async def get_segments(self, *, list_id, params=None):
         return await self._list_op(self.get, 'segments',
